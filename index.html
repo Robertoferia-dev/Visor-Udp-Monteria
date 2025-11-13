@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Visor UDP - Montería</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+    
+
+    <style>
+        /* Definición de Variables de Color para las UDP y Edición */
+        :root {
+            --udp-mixta: #3498db; /* Azul */
+            --udp-comercial: #e74c3c; /* Rojo */
+            --udp-residencial: #2ecc71; /* Verde */
+            --udp-ambiental: #f1c40f; /* Amarillo */
+            --ok: #22c55e; /* Verde para Edición/Drawn */
+            --cyan: #0ea5e9; /* Cyan para Guardado/Saved */
+            --bg-dark: #2c3e50;
+            --text-light: #ecf0f1;
+        }
+
+        /* Estilo general del cuerpo y mapa */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Evita barras de desplazamiento */
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        #map {
+            flex-grow: 1; /* Ocupa el espacio restante */
+            z-index: 1;
+        }
+
+        /* --- Estilo para el Encabezado y Buscador --- */
+        header {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            z-index: 1000;
+        }
+
+        header h1 {
+            margin: 0 20px 0 10px;
+            font-size: 1.2em;
+        }
+        
+        /* Estilos del Buscador */
+        .search-container {
+            margin-left: auto; /* Mueve el buscador a la derecha */
+            display: flex;
+            align-items: center;
+            border: 1px solid #5d6d7e;
+            border-radius: 4px;
+            overflow: hidden;
+            background-color: #34495e; 
+        }
+
+        #search-input {
+            padding: 8px 10px;
+            border: none;
+            background-color: transparent;
+            color: var(--text-light);
+            font-size: 1em;
+            width: 250px;
+            outline: none;
+        }
+        
+        #search-input::placeholder {
+            color: #bdc3c7;
+            opacity: 0.8;
+        }
+
+        #search-button, .btn-clear-search {
+            background-color: #4c627a;
+            color: var(--text-light);
+            border: none;
+            padding: 8px 10px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            line-height: 1; 
+        }
+        
+        #search-button:hover, .btn-clear-search:hover {
+            background-color: #5d7591;
+        }
+        
+        .btn-clear-search {
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        /* ------------------------------------------- */
+
+
+        /* Estilo para la Barra de Herramientas de Filtros y Edición */
+        .toolbar {
+            padding: 8px 10px;
+            background-color: #34495e; /* Mismo color que el buscador para unificar */
+            display: flex;
+            gap: 8px;
+            z-index: 999;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Estilo de Botones */
+        .btn {
+            background-color: #4c627a;
+            color: var(--text-light);
+            border: none;
+            padding: 6px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.9em;
+            transition: background-color 0.2s, transform 0.1s;
+            white-space: nowrap; /* Evita que el texto se rompa */
+        }
+
+        .btn:hover:not(:disabled) {
+            background-color: #5d7591;
+        }
+
+        .btn:disabled {
+            background-color: #5d6d7e;
+            color: #bdc3c7;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .filter.active {
+            background-color: #2980b9; /* Color activo para filtros */
+            font-weight: bold;
+        }
+
+        /* Estilo para Leyenda */
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+            font-size: 0.9em;
+        }
+
+        .legend h4 {
+            margin: 0 0 5px 0;
+            padding-bottom: 3px;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .legend-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 3px;
+        }
+
+        .legend-chip {
+            width: 14px;
+            height: 14px;
+            margin-right: 8px;
+            border-radius: 3px;
+            border: 1px solid #333;
+        }
+
+        /* Colores de los chips de leyenda */
+        .chip-mixta { background-color: var(--udp-mixta); border-color: var(--udp-mixta); }
+        .chip-comercial { background-color: var(--udp-comercial); border-color: var(--udp-comercial); }
+        .chip-residencial { background-color: var(--udp-residencial); border-color: var(--udp-residencial); }
+        .chip-ambiental { background-color: var(--udp-ambiental); border-color: var(--udp-ambiental); }
+
+        /* Chips de Edición/Guardado */
+        .legend-row .chip-saved { border-color: var(--cyan); background: rgba(14, 165, 233, 0.15); }
+        .legend-row .chip-drawn { border-color: var(--ok); background: rgba(34, 197, 94, 0.15); }
+
+        /* Estilo del Popup */
+        .udp-popup {
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        .udp-popup h4 {
+            margin: 0 0 5px 0;
+            padding-bottom: 3px;
+            border-bottom: 1px solid #ccc;
+        }
+        .udp-popup p {
+            margin: 3px 0;
+        }
+        .btn-pdf-popup {
+            display: inline-block;
+            margin-top: 8px;
+            background-color: var(--bg-dark);
+            color: white;
+            padding: 5px 10px;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+        
+        /* Ajuste para el Geocodificador de Leaflet */
+        .leaflet-control-geocoder {
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+            border-radius: 4px;
+            /* Lo colocamos más bajo para que no interfiera con otros controles de Leaflet */
+            margin-top: 150px; 
+            margin-right: 10px;
+        }
+        
+    </style>
+</head>
+<body>
+    
+    
+    <header>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 11l6-6 6 6-6 6-6-6z" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <h1>Visor UDP - Montería</h1>
+        
+        <div class="search-container">
+            <input type="text" id="search-input" placeholder="Buscar por código (UDP-X-XX) o zona..." />
+            <button id="search-button">
+                <i class="fas fa-search"></i> 
+            </button>
+            <button id="search-clear" class="btn-clear-search" style="display:none;">
+                &times;
+            </button>
+        </div>
+        
+    </header>
+    
+    
+    <div class="toolbar" id="filter-toolbar">
+        <button id="filter-all" class="btn filter active" data-zone="All">Todas</button>
+        <button id="filter-oriental" class="btn filter" data-zone="Oriente">Oriente</button>
+        <button id="filter-occidental" class="btn filter" data-zone="Occidente">Occidente</button>
+        <button id="filter-ciudad-sur" class="btn filter" data-zone="Sur">Sur</button>
+        <button id="filter-centro" class="btn filter" data-zone="Central">Central</button>
+    </div>
+    
+    
+    <div class="toolbar">
+        <button id="btn-save-last" class="btn save" disabled>Guardar último dibujo</button>
+        <button id="btn-undo-delete" class="btn undo" disabled>Deshacer último borrado</button>
+        <button id="btn-export" class="btn export">Exportar</button>
+        <label class="btn import" for="file-import">Importar GeoJSON</label>
+        <input id="file-import" type="file" accept="application/geo+json,application/json,.geojson,.json" style="display:none">
+        <button id="btn-clear" class="btn clear">Borrar edición</button>
+    </div>
+    
+    
+    <div id="map"></div>
+    
+    
+    <div class="legend">
+        <h4>Clasificación UDP</h4>
+        <div class="legend-row"><span class="legend-chip chip-mixta"></span> UDP Mixta</div>
+        <div class="legend-row"><span class="legend-chip chip-comercial"></span> UDP Comercial</div>
+        <div class="legend-row"><span class="legend-chip chip-residencial"></span> UDP Residencial</div>
+        <div class="legend-row"><span class="legend-chip chip-ambiental"></span> UDP Ambiental</div>
+        <h4 style="margin-top:10px;">Edición / Guardado</h4>
+        <div class="legend-row"><span class="legend-chip chip-saved" style="background:rgba(14,165,233,.15)"></span> Guardado</div>
+        <div class="legend-row"><span class="legend-chip chip-drawn" style="background:rgba(34,197,94,.15)"></span> En Edición</div>
+    </div>
+    
+    <script>
+        // Coordenadas del centro de Montería para zoom de reset
+        const MONTERIA_CENTER = [8.751, -75.885]; 
+        const MONTERIA_ZOOM = 13;
+
+
+        // 1) MAPA BASE
+        const map = L.map('map').setView(MONTERIA_CENTER, MONTERIA_ZOOM);
+
+
+        const baseOSM = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        const baseSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri'
+        });
+
+
+        const layerControl = L.control.layers(
+            { 'Mapa': baseOSM, 'Satélite': baseSat },
+            null, { collapsed: true }
+        ).addTo(map);
+
+        // ----------------------------------------------------------------------
+        // 📌 AGREGADO: Integración del Geocodificador (Búsqueda por Dirección/Calle)
+        // ----------------------------------------------------------------------
+        
+        // Define el Bounding Box para limitar la búsqueda a Montería (aproximadamente)
+        const MONTERIA_BBOX = L.latLngBounds(
+            L.latLng(8.7, -76.0), // Esquina Suroeste
+            L.latLng(8.9, -75.7)  // Esquina Noreste
+        );
+
+        L.Control.geocoder({
+            defaultMarkGeocode: false, // Evita que ponga un marcador por defecto
+            placeholder: 'Buscar dirección o lugar...',
+            // Configuración para limitar la búsqueda a la caja delimitadora de Montería
+            geocoder: L.Control.Geocoder.nominatim({
+                geocodingQueryParams: {
+                    viewbox: `${MONTERIA_BBOX.getWest()},${MONTERIA_BBOX.getSouth()},${MONTERIA_BBOX.getEast()},${MONTERIA_BBOX.getNorth()}`,
+                    bounded: 1 // Fuerza al servicio a limitar los resultados dentro del viewbox
+                }
+            })
+        })
+        .on('markgeocode', function(e) {
+            const bbox = e.geocode.bbox;
+            const poly = L.polygon([
+                bbox.getSouthEast(),
+                bbox.getNorthEast(),
+                bbox.getNorthWest(),
+                bbox.getSouthWest()
+            ]);
+            
+            // 1. Ajustar el mapa al resultado de la búsqueda
+            map.fitBounds(poly.getBounds());
+            
+            // 2. Opcional: Mostrar un marcador o círculo en el resultado
+            const resultMarker = L.marker(e.geocode.center)
+                .addTo(map)
+                .bindPopup(e.geocode.name)
+                .openPopup();
+                
+            // 3. Opcional: Borrar el marcador después de 10 segundos
+            setTimeout(() => {
+                map.removeLayer(resultMarker);
+            }, 10000);
+        })
+        .addTo(map);
+        // ----------------------------------------------------------------------
+
+
+        // 2) CAPA DE LÍMITES UDP (Contiene los datos del GeoJSON de las UDP)
+        const udpLimitsData = {
+            "type": "FeatureCollection",
+            "features": [
+
+                // 🚩 UDP AGREGADA: UDP-5-01 (Macro-Zona ahora es "Sur") 🚩
+                { "type":"Feature","properties":{"codigo":"UDP-5-01","macro_zona":"Sur", "tipo_udp":"Ambiental", "pdf_url":"pdf/UDP_5-01(PEMP)_EDIFICABILIDAD.pdf"},
+                    "geometry":{
+                        "type": "Polygon",
+                        "coordinates": [
+                            [
+                                [ -75.881495, 8.759376 ],
+                                [ -75.884972, 8.763278 ],
+                                [ -75.892096, 8.749069 ],
+                                [ -75.890121, 8.750808 ],
+                                [ -75.891237, 8.75068 ],
+                                [ -75.888362, 8.752292 ],
+                                [ -75.88686, 8.750808 ],
+                                [ -75.883899, 8.755134 ],
+                                [ -75.88553, 8.75594 ],
+                                [ -75.88347, 8.758782 ],
+                                [ -75.882268, 8.758315 ],
+                                [ -75.881495, 8.759376 ]
+                            ]
+                        ]
+                    }
+                },
+                
+                // 🚩 UDP PREVIAMENTE AGREGADA: UDP-5-02 (Macro-Zona ahora es "Sur") 🚩
+                { "type":"Feature","properties":{"codigo":"UDP-5-02","macro_zona":"Sur", "tipo_udp":"Residencial", "pdf_url":"pdf/UDP_5-02_EDIFICABILIDAD.pdf"},
+                    "geometry":{
+                        "type": "Polygon",
+                        "coordinates": [
+                            [
+                                [ -75.884371, 8.742494 ],
+                                [ -75.887032, 8.743342 ],
+                                [ -75.889692, 8.750977 ],
+                                [ -75.89098, 8.750808 ],
+                                [ -75.888233, 8.752165 ],
+                                [ -75.88686, 8.750638 ],
+                                [ -75.88377, 8.755134 ],
+                                [ -75.885487, 8.755982 ],
+                                [ -75.883427, 8.758612 ],
+                                [ -75.882225, 8.758188 ],
+                                [ -75.881367, 8.759376 ],
+                                [ -75.88377, 8.762175 ],
+                                [ -75.8848, 8.763278 ],
+                                [ -75.883083, 8.766501 ],
+                                [ -75.874586, 8.759206 ],
+                                [ -75.884371, 8.742494 ]
+                            ]
+                        ]
+                    }
+                },
+                
+                // 🚩 UDP PREVIAMENTE AGREGADA: UDP-8-04-1 (Macro-Zona ahora es "Central") 🚩
+                { "type":"Feature","properties":{"codigo":"UDP-8-04-1","macro_zona":"Central", "tipo_udp":"Mixta", "pdf_url":"pdf/UDP_8-04-1_EDIFICABILIDAD.pdf"},
+                    "geometry":{
+                        "type": "Polygon",
+                        "coordinates": [
+                            [
+                                [ -75.874329, 8.759206 ],
+                                [ -75.878363, 8.751656 ],
+                                [ -75.873384, 8.748517 ],
+                                [ -75.870123, 8.743258 ],
+                                [ -75.86729, 8.742664 ],
+                                [ -75.869522, 8.75488 ],
+                                [ -75.874329, 8.759206 ]
+                            ]
+                        ]
+                    }
+                },
+                
+                // 🚩 UDP PREVIAMENTE AGREGADA: UDP-5-03 (Macro-Zona ahora es "Sur") 🚩
+                { "type":"Feature","properties":{"codigo":"UDP-5-03","macro_zona":"Sur", "tipo_udp":"Mixta", "pdf_url":"pdf/UDP_5-03_EDIFICABILIDAD.pdf"},
+                    "geometry":{
+                        "type": "Polygon",
+                        "coordinates": [
+                            [
+                                [ -75.884113, 8.742664 ],
+                                [ -75.87965, 8.750044 ],
+                                [ -75.878706, 8.750723 ],
+                                [ -75.878105, 8.751826 ],
+                                [ -75.873556, 8.748517 ],
+                                [ -75.870295, 8.743088 ],
+                                [ -75.875874, 8.742494 ],
+                                [ -75.874414, 8.739779 ],
+                                [ -75.875702, 8.738761 ],
+                                [ -75.878105, 8.741646 ],
+                                [ -75.884113, 8.742664 ]
+                            ]
+                        ]
+                    }
+                },
+                
+                // 🚩 UDP PREVIAMENTE AGREGADA: UDP-6-01 (Macro-Zona ahora es "Sur") 🚩
+                { "type":"Feature","properties":{"codigo":"UDP-6-01","macro_zona":"Sur", "tipo_udp":"Mixta", "pdf_url":"pdf/UDP_6-01_EDIFICABILIDAD.pdf"},
+                    "geometry":{
+                        "type": "Polygon",
+                        "coordinates": [
+                            [
+                                [ -75.878105, 8.7419 ],
+                                [ -75.883942, 8.742409 ],
+                                [ -75.883169, 8.736556 ],
+                                [ -75.872784, 8.727733 ],
+                                [ -75.873642, 8.731126 ],
+                                [ -75.869265, 8.742918 ],
+                                [ -75.875788, 8.742409 ],
+                                [ -75.874329, 8.740034 ],
+                                [ -75.875444, 8.738761 ],
+                                [ -75.878105, 8.7419 ]
+                            ]
+                        ]
+                    }
+                },
+                
+                // 🚩 UDP CORREGIDA: UDP-6-02 (Macro-Zona ahora es "Sur") 🚩
+                { "type":"Feature","properties":{"codigo":"UDP-6-02","macro_zona":"Sur", "tipo_udp":"Ambiental", "pdf_url":"pdf/UDP_6-02_EDIFICABILIDAD.pdf"},
+                    "geometry":{
+                        "type": "Polygon",
+                        "coordinates": [
+                            [
+                                [ -75.853472, 8.736216 ],
+                                [ -75.855532, 8.733586 ],
+                                [ -75.854931, 8.732653 ],
+                                [ -75.860682, 8.727733 ],
+                                [ -75.859394, 8.726715 ],
+                                [ -75.866432, 8.723236 ],
+                                [ -75.872526, 8.728072 ],
+                                [ -75.87347, 8.731296 ],
+                                [ -75.868921, 8.742833 ],
+                                [ -75.859137, 8.739695 ],
+                                [ -75.853472, 8.736216 ]
+                            ]
+                        ]
+                    }
+                },
+                
+                // 🚩 UDP PREVIAMENTE AGREGADA: UDP-7-01 (Macro-Zona ahora es "Sur") 🚩
+                { "type":"Feature","properties":{"codigo":"UDP-7-01","macro_zona":"Sur", "tipo_udp":"Mixta", "pdf_url":"pdf/UDP_7-01_EDIFICABILIDAD.pdf"},
+                    "geometry":{
+                        "type": "Polygon",
+                        "coordinates": [
+                            [
+                                [ -75.870552, 8.769046 ],
+                                [ -75.869222, 8.768325 ],
+                                [ -75.874071, 8.759248 ],
+                                [ -75.883083, 8.766968 ],
+                                [ -75.880423, 8.772439 ],
+                                [ -75.876174, 8.770827 ],
+                                [ -75.87317, 8.768113 ],
+                                [ -75.870552, 8.769046 ]
+                            ]
+                        ]
+                    }
+                },
+                
+                // 🚩 UDP PREVIAMENTE AGREGADA: UDP-8-01 (Macro-Zona ahora es "Sur") 🚩
+                { "type":"Feature","properties":{"codigo":"UDP-8-01","macro_zona":"Sur", "tipo_udp":"Residencial", "pdf_url":"pdf/UDP_8-01_EDIFICABILIDAD.pdf"},
+                    "geometry":{
+                        "type": "Polygon",
+                        "coordinates": [
+                            [
+                                [ -75.862741, 8.795087 ],
+                                [ -75.85536, 8.791864 ],
+                                [ -75.86935, 8.768367 ],
+                                [ -75.870466, 8.769046 ],
+                                [ -75.869694, 8.7721 ],
+                                [ -75.87347, 8.783297 ],
+                                [ -75.872955, 8.784654 ],
+                                [ -75.862741, 8.795087 ]
+                            ]
+                        ]
+                    }
+                },
+                
+                // --- UDPs ANTERIORMENTE AGREGADAS O ACTUALIZADAS ---
+                
+                // UDP 12-01 (Macro-Zona ahora es "Oriente")
+                { "type":"Feature","properties":{"codigo":"UDP-12-01","macro_zona":"Oriente", "tipo_udp":"Mixta", "pdf_url":"pdf/UDP_12-01_EDIFICABILIDAD.pdf"},
+                    "geometry":{"type":"Polygon","coordinates":[[
+                    [-75.846262,8.755813],[-75.840254,8.754286],[-75.840511,8.75225],[-75.838881,8.75191],[-75.83931,8.749959],[-75.848408,8.749366],[-75.849695,8.751232],[-75.848837,8.753862],[-75.846262,8.755813]
+                    ]]}
+                },
+                // UDP 1-01 (Macro-Zona ahora es "Occidente")
+                { "type":"Feature","properties":{"codigo":"UDP-1-01","macro_zona":"Occidente", "tipo_udp":"Residencial", "pdf_url":"docs/udp-1-01.pdf"},
+                    "geometry":{"type":"Polygon","coordinates":[[
+                    [-75.906429,8.742409],[-75.918274,8.753437],[-75.896988,8.773966],[-75.891151,8.768367],[-75.899391,8.754286],[-75.893211,8.747499],[-75.900936,8.749196],[-75.906429,8.742409]
+                    ]]}
+                },
+                // UDP 2-01 (Macro-Zona ahora es "Occidente")
+                { "type":"Feature","properties":{"codigo":"UDP-2-01","macro_zona":"Occidente", "tipo_udp":"Ambiental", "pdf_url":"docs/udp-2-01.pdf"},
+                    "geometry":{"type":"Polygon","coordinates":[[
+                    [-75.892868,8.747669],[-75.880508,8.772439],[-75.882912,8.784315],[-75.8848,8.782788],[-75.886688,8.783636],[-75.891151,8.776002],[-75.891666,8.768707],[-75.899391,8.753777],[-75.892868,8.747669]
+                    ]]}
+                },
+                // UDP 3-01 (Macro-Zona ahora es "Occidente")
+                { "type":"Feature","properties":{"codigo":"UDP-3-01","macro_zona":"Occidente", "tipo_udp":"Comercial", "pdf_url":"pdf/UDP_3-01_EDIFICABILIDAD.pdf"},
+                    "geometry":{"type":"Polygon","coordinates":[[
+                    [-75.905399,8.743088],[-75.907545,8.739355],[-75.902052,8.740797],[-75.893726,8.745463],[-75.888147,8.737998],[-75.887203,8.743173],[-75.889692,8.750808],[-75.893383,8.747754],[-75.901108,8.749026],[-75.905399,8.743088]
+                    ]]}
+                },
+                // UDP 3-02 (Macro-Zona ahora es "Occidente")
+                { "type":"Feature","properties":{"codigo":"UDP-3-02","macro_zona":"Occidente", "tipo_udp":"Mixta", "pdf_url":"pdf/UDP_3-02_EDIFICABILIDAD.pdf"},
+                    "geometry":{"type":"Polygon","coordinates":[[
+                    [-75.907545,8.739355],[-75.90188,8.740882],[-75.899048,8.729938],[-75.8957,8.732738],[-75.894585,8.732653],[-75.892954,8.733841],[-75.891581,8.733162],[-75.892611,8.732314],[-75.889692,8.730108],[-75.88892,8.732993],[-75.888062,8.738083],[-75.893555,8.745209],[-75.907545,8.739355]
+                    ]]}
+                },
+                // UDP 4-02 (Macro-Zona ahora es "Sur")
+                { "type":"Feature","properties":{"codigo":"UDP-4-02","macro_zona":"Sur", "tipo_udp":"Residencial", "pdf_url":"docs/udp-4-02.pdf"},
+                    "geometry":{"type":"Polygon","coordinates":[[
+                    [-75.877419,8.72154],[-75.882225,8.725442],[-75.880165,8.727309],[-75.882568,8.729854],[-75.885658,8.727818],[-75.889606,8.730023],[-75.892525,8.732059],[-75.891666,8.733926],[-75.893555,8.734774],[-75.899391,8.729854],[-75.89819,8.727478],[-75.895443,8.7268],[-75.893383,8.722897],[-75.889778,8.716958],[-75.898361,8.717128],[-75.898018,8.714074],[-75.894756,8.714752],[-75.89201,8.712547],[-75.889606,8.714752],[-75.886345,8.712716],[-75.877419,8.72154]
+                    ]]}
+                },
+                // UDP 4-01 (Macro-Zona ahora es "Sur")
+                { "type":"Feature","properties":{"codigo":"UDP-4-01","macro_zona":"Sur", "tipo_udp":"Comercial", "pdf_url":"docs/udp-4-01.pdf"},
+                    "geometry":{"type":"Polygon","coordinates":[[
+                    [-75.866261,8.722897],[-75.874329,8.728496],[-75.883255,8.736301],[-75.883942,8.74207],[-75.887547,8.743088],[-75.890121,8.729684],[-75.892525,8.732229],[-75.891495,8.734435],[-75.893898,8.735113],[-75.899563,8.729514],[-75.898361,8.726969],[-75.893211,8.723236],[-75.888062,8.728666],[-75.88274,8.729684],[-75.880508,8.727818],[-75.882225,8.725612],[-75.876389,8.720691],[-75.874157,8.718655],[-75.869522,8.718825],[-75.866261,8.722897]
+                    ]]}
+                },
+                
+                // 🚩 UDPs ORIGINALES (Macro-Zonas renombradas) 🚩
+                
+                // UDP 10-01 (Macro-Zona ahora es "Central")
+                { "type":"Feature","properties":{"codigo":"UDP-10-01","macro_zona":"Central", "tipo_udp":"Comercial", "pdf_url":"docs/udp-10-01.pdf"},
+                    "geometry":{"type":"Polygon","coordinates":[[
+                    [-75.854244,8.82965],[-75.851626,8.83088],[-75.843859,8.826003],[-75.841541,8.827699],[-75.840769,8.827148],[-75.840168,8.82842],[-75.839267,8.827827],[-75.840297,8.825537],[-75.836349,8.823798],[-75.835748,8.821126],[-75.835018,8.82172],[-75.832658,8.819515],[-75.833859,8.818539],[-75.835576,8.820617],[-75.838537,8.816589],[-75.843601,8.820236],[-75.844846,8.822992],[-75.849824,8.824646],[-75.854244,8.82965]
+                    ]]}
+                },
+                // UDP 9-01 (Macro-Zona ahora es "Occidente")
+                { "type":"Feature","properties":{"codigo":"UDP-9-01","macro_zona":"Occidente", "tipo_udp":"Residencial", "pdf_url":"pdf/UDP_9-01_EDIFICABILIDAD.pdf"},
+                    "geometry":{"type":"Polygon","coordinates":[[
+                    [-75.847292,8.810864],[-75.849695,8.811457],[-75.849953,8.8101],[-75.854588,8.811627],[-75.855017,8.810694],[-75.858965,8.811372],[-75.860424,8.809167],[-75.861969,8.809252],[-75.858622,8.80094],[-75.86257,8.795087],[-75.855703,8.792288],[-75.850554,8.800516],[-75.847292,8.810864]
+                    ]]}
+                },
+                // UDP 9-02 (Macro-Zona ahora es "Occidente")
+                { "type":"Feature","properties":{"codigo":"UDP-9-02","macro_zona":"Occidente", "tipo_udp":"Residencial", "pdf_url":"docs/udp-9-02.pdf"},
+                    "geometry":{"type":"Polygon","coordinates":[[
+                    [-75.847034,8.810779],[-75.844803,8.810015],[-75.843687,8.810864],[-75.841885,8.808998],[-75.839481,8.808319],[-75.839396,8.806368],[-75.838366,8.806792],[-75.840597,8.802382],[-75.840425,8.801279],[-75.842314,8.800176],[-75.843515,8.801194],[-75.850124,8.800346],[-75.847034,8.810779]
+                    ]]}
+                },
+                // UDP 8-02 (Macro-Zona ahora es "Sur")
+                { "type":"Feature","properties":{"codigo":"UDP-8-02","macro_zona":"Sur", "tipo_udp":"Ambiental", "pdf_url":"docs/udp-8-02.pdf"},
+                    "geometry":{"type":"Polygon","coordinates":[[
+                    [-75.851154,8.799243],[-75.864029,8.776171],[-75.850811,8.769216],[-75.845661,8.778547],[-75.837078,8.786011],[-75.843086,8.789743],[-75.845318,8.788216],[-75.846863,8.79127],[-75.841541,8.793306],[-75.838795,8.794324],[-75.843086,8.8006],[-75.851154,8.799243]
+                    ]]}
+                },
+                // UDP 8-03 (Macro-Zona ahora es "Sur")
+                { "type":"Feature","properties":{"codigo":"UDP-8-03","macro_zona":"Sur", "tipo_udp":"Mixta", "pdf_url":"pdf/UDP_8-03_EDIFICABILIDAD.pdf"},
+                    "geometry":{"type":"Polygon","coordinates":[[
+                    [-75.853987,8.770912],[-75.856905,8.768791],[-75.860081,8.759545],[-75.868235,8.751401],[-75.869522,8.755389],[-75.873814,8.759291],[-75.864801,8.776596],[-75.853987,8.770912]
+                    ]]}
+                },
+                // UDP 8-04 (Macro-Zona ahora es "Central")
+                { "type":"Feature","properties":{"codigo":"UDP-8-04","macro_zona":"Central", "tipo_udp":"Comercial", "pdf_url":"pdf/UDP_8-04_EDIFICABILIDAD.pdf"},
+                    "geometry":{"type":"Polygon","coordinates":[[
+                    [-75.862055,8.757679],[-75.857506,8.755049],[-75.860682,8.75225],[-75.862656,8.750553],[-75.859652,8.749535],[-75.859566,8.750808],[-75.855017,8.748263],[-75.855618,8.745887],[-75.852442,8.741985],[-75.851927,8.738846],[-75.853386,8.736386],[-75.858235,8.739949],[-75.866947,8.742197],[-75.867548,8.746396],[-75.868235,8.750977],[-75.862055,8.757679]
+                    ]]}
+                }
+            ]
+        };
+
+        // FUNCIÓN DE ESTILO: Asigna color según el tipo_udp y el filtro activo
+        function stylePorUDP(feature, currentFilter = 'All') {
+            const macroZone = feature.properties?.macro_zona;
+            const tipoUDP = feature.properties?.tipo_udp;
+
+            if (!macroZone || !tipoUDP) {
+                return { color: '#dc3545', weight: 1, opacity: 1, fillOpacity: 0.1 }; 
+            }
+
+            // La zona del GeoJSON debe COINCIDIR con la zona del filtro (data-zone)
+            const isMatch = (currentFilter === 'All' || macroZone === currentFilter);
+            
+            let color;
+            switch (tipoUDP) {
+                case 'Mixta': color = 'var(--udp-mixta)'; break;
+                case 'Comercial': color = 'var(--udp-comercial)'; break;
+                case 'Residencial': color = 'var(--udp-residencial)'; break;
+                case 'Ambiental': color = 'var(--udp-ambiental)'; break;
+                default: color = '#6c757d'; 
+            }
+
+
+            if (isMatch) {
+                return { 
+                    color: color, 
+                    weight: 2.5, 
+                    opacity: 1, 
+                    fillOpacity: 0.5
+                };
+            } else {
+                return { 
+                    color: '#888', 
+                    weight: 1,
+                    opacity: 0.2, 
+                    fillOpacity: 0.02 
+                };
+            }
+        }
+
+        // FUNCIÓN PARA GENERAR EL CONTENIDO DEL POPUP
+        function createPopupContent(properties) {
+            const codigo = properties.codigo || 'N/A';
+            const macroZone = properties.macro_zona || 'N/A';
+            const tipoUDP = properties.tipo_udp || 'N/A';
+            const pdfUrl = properties.pdf_url; 
+
+            let content = `
+                <div class="udp-popup">
+                    <h4>Detalles de la UDP</h4>
+                    <p><strong>Código:</strong> ${codigo}</p>
+                    <p><strong>Macro-Zona:</strong> ${macroZone}</p>
+                    <p><strong>Clasificación:</strong> ${tipoUDP}</p>
+            `;
+            
+            if (pdfUrl) {
+                content += `<a href="${pdfUrl}" target="_blank" class="btn-pdf-popup">Ver Documento PDF</a>`;
+            } else {
+                content += `<p style="color:#ef4444;">Sin documento asociado.</p>`;
+            }
+
+            content += `</div>`;
+            return content;
+        }
+
+
+        let udpLimitsLayer = null;
+
+        if (udpLimitsData.features && udpLimitsData.features.length) {
+            map.createPane('udp-limits-pane');
+            map.getPane('udp-limits-pane').style.zIndex = 650;
+
+            udpLimitsLayer = L.geoJSON(udpLimitsData, {
+                pane: 'udp-limits-pane',
+                style: (f) => stylePorUDP(f, 'All'),
+                onEachFeature: (f, layer)=>{
+                    // Uso de bindPopup para mostrar datos y el botón del PDF
+                    const popupContent = createPopupContent(f.properties);
+                    layer.bindPopup(popupContent);
+                }
+            }).addTo(map);
+
+            layerControl.addOverlay(udpLimitsLayer, 'Límites UDP (Por Tipo)');
+
+            try {
+                // Ajusta el mapa para ver todos los nuevos polígonos
+                const b = udpLimitsLayer.getBounds();
+                if (b.isValid()) map.fitBounds(b.pad(0.06));
+            } catch(_) {}
+
+        } else {
+            map.setView(MONTERIA_CENTER, MONTERIA_ZOOM);
+        }
+
+        // 3) FUNCIONALIDAD DE BOTONES DE FILTRO (Macro-zonas)
+        const filterButtons = document.querySelectorAll('#filter-toolbar .btn.filter');
+
+
+        function filterMapByZone(zoneName) {
+            if (!udpLimitsLayer) return;
+
+            let targetBounds = null;
+
+
+            udpLimitsLayer.eachLayer(layer => {
+                const macroZone = layer.feature.properties?.macro_zona;
+                
+                layer.setStyle(stylePorUDP(layer.feature, zoneName));
+
+                const isMatch = (zoneName === 'All' || macroZone === zoneName);
+                if (isMatch) {
+                    if (!targetBounds) {
+                        targetBounds = layer.getBounds();
+                    } else {
+                        targetBounds.extend(layer.getBounds());
+                    }
+                }
+            });
+
+
+            if (targetBounds && targetBounds.isValid()) {
+                map.fitBounds(targetBounds.pad(0.06));
+            } else if (zoneName === 'All' && udpLimitsLayer.getBounds().isValid()) {
+                map.fitBounds(udpLimitsLayer.getBounds().pad(0.06));
+            } else if (zoneName !== 'All') {
+                console.warn(`No se encontraron polígonos para la zona: ${zoneName}`);
+                map.setView(MONTERIA_CENTER, MONTERIA_ZOOM);
+            }
+
+        }
+
+
+        filterButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                filterButtons.forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+
+                const zone = this.dataset.zone;
+                filterMapByZone(zone);
+            });
+        });
+
+        // 4) DIBUJOS Y PERSISTENCIA (Edición, Guardado, Undo, Import/Export)
+        const drawnItems = new L.FeatureGroup().addTo(map);     
+        const savedItems = new L.FeatureGroup().addTo(map);     
+        layerControl.addOverlay(drawnItems, 'Dibujos (edición)');
+        layerControl.addOverlay(savedItems, 'Guardados');
+
+
+        const LS_KEY_DRAWN = 'monteria_drawn_polygons';
+        const LS_KEY_SAVED = 'monteria_saved_polygons';
+        const btnSaveLast = document.getElementById('btn-save-last');
+        const btnUndo    = document.getElementById('btn-undo-delete');
+        const btnExport   = document.getElementById('btn-export');
+        const btnClear  = document.getElementById('btn-clear');
+        const fileImport  = document.getElementById('file-import');
+
+
+        let lastDrawnLayer = null;      
+        const undoStack = [];            
+
+
+        function saveGroupToLS(group, key) {
+            const gj = group.toGeoJSON();
+            localStorage.setItem(key, JSON.stringify(gj));
+        }
+
+        function savedStyle(){ return { color:'var(--cyan)', weight:2.5, fillOpacity:.15 }; }
+        function drawnStyle(){ return { color:'var(--ok)', weight:2.5, fillOpacity:.15 }; }
+
+
+        function loadGroupFromLS(group, key, styleFn) {
+            try {
+                const raw = localStorage.getItem(key);
+                if (raw) {
+                    const data = JSON.parse(raw);
+                    L.geoJSON(data, {
+                        style: styleFn,
+                        onEachFeature: (feature, layer) => {
+                            group.addLayer(layer);
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error("Error al cargar datos de Local Storage:", e);
+                localStorage.removeItem(key); // Limpiar datos corruptos
+            }
+        }
+
+        // Inicializar capas de edición/guardado
+        loadGroupFromLS(savedItems, LS_KEY_SAVED, savedStyle);
+        loadGroupFromLS(drawnItems, LS_KEY_DRAWN, drawnStyle);
+
+
+        // Configuración de la barra de dibujo de Leaflet.Draw
+        const drawControl = new L.Control.Draw({
+            edit: {
+                featureGroup: drawnItems, // Dibujos en edición
+                poly: { allowIntersection: false },
+                edit: true,
+                remove: true
+            },
+            draw: {
+                polyline: false, 
+                marker: false, 
+                circle: false, 
+                circlemarker: false, 
+                rectangle: {
+                    shapeOptions: drawnStyle()
+                },
+                polygon: {
+                    allowIntersection: false,
+                    shapeOptions: drawnStyle()
+                }
+            }
+        }).addTo(map);
+
+        // Evento al terminar de dibujar
+        map.on(L.Draw.Event.CREATED, function (e) {
+            const type = e.layerType;
+            const layer = e.layer;
+            
+            // Asignar un estilo de "Edición"
+            layer.setStyle(drawnStyle());
+            
+            drawnItems.addLayer(layer);
+            lastDrawnLayer = layer;
+            btnSaveLast.disabled = false;
+            saveGroupToLS(drawnItems, LS_KEY_DRAWN);
+        });
+        
+        // Evento al modificar o borrar
+        map.on(L.Draw.Event.EDITED, function (e) {
+            saveGroupToLS(drawnItems, LS_KEY_DRAWN);
+            saveGroupToLS(savedItems, LS_KEY_SAVED);
+        });
+
+        map.on(L.Draw.Event.DELETED, function (e) {
+            // Guardar el elemento borrado en el stack para deshacer
+            e.layers.eachLayer(layer => {
+                layer.setStyle(drawnStyle()); // Restaurar estilo original antes de guardar
+                undoStack.push(layer);
+            });
+            btnUndo.disabled = false;
+            saveGroupToLS(drawnItems, LS_KEY_DRAWN);
+            saveGroupToLS(savedItems, LS_KEY_SAVED);
+        });
+        
+        // Manejadores de botones personalizados
+        
+        // Guardar Último Dibujo
+        btnSaveLast.addEventListener('click', function() {
+            if (lastDrawnLayer) {
+                // Mover la capa del grupo de edición al grupo de guardados
+                drawnItems.removeLayer(lastDrawnLayer);
+                
+                // Clonar la capa para asegurar que no haya referencias cruzadas
+                const geojson = lastDrawnLayer.toGeoJSON();
+                const newSavedLayer = L.geoJSON(geojson, { style: savedStyle() });
+                
+                // Añadir al grupo de guardados
+                newSavedLayer.eachLayer(layer => {
+                    savedItems.addLayer(layer);
+                    // Opcional: añadir un popup simple al guardado
+                    layer.bindPopup("Dibujo guardado por el usuario.");
+                });
+                
+                lastDrawnLayer = null;
+                this.disabled = true;
+                saveGroupToLS(drawnItems, LS_KEY_DRAWN);
+                saveGroupToLS(savedItems, LS_KEY_SAVED);
+            }
+        });
+        
+        // Deshacer Último Borrado
+        btnUndo.addEventListener('click', function() {
+            const layerToRestore = undoStack.pop();
+            if (layerToRestore) {
+                // Determinar a qué grupo pertenecía (simple heurística)
+                const targetGroup = layerToRestore.options.style().color === savedStyle().color ? savedItems : drawnItems;
+                targetGroup.addLayer(layerToRestore);
+                
+                if (targetGroup === drawnItems) {
+                    // Si se restaura a drawnItems, debe ser el último dibujado
+                    lastDrawnLayer = layerToRestore;
+                    btnSaveLast.disabled = false;
+                }
+                
+                saveGroupToLS(drawnItems, LS_KEY_DRAWN);
+                saveGroupToLS(savedItems, LS_KEY_SAVED);
+            }
+            if (undoStack.length === 0) {
+                this.disabled = true;
+            }
+        });
+        
+        // Borrar Edición (Limpiar todo)
+        btnClear.addEventListener('click', function() {
+            if (confirm('¿Estás seguro de que quieres borrar todos los dibujos en Edición y Guardados? Esta acción no se puede deshacer.')) {
+                drawnItems.clearLayers();
+                savedItems.clearLayers();
+                localStorage.removeItem(LS_KEY_DRAWN);
+                localStorage.removeItem(LS_KEY_SAVED);
+                lastDrawnLayer = null;
+                btnSaveLast.disabled = true;
+                undoStack.length = 0;
+                btnUndo.disabled = true;
+            }
+        });
+        
+        // Exportar GeoJSON
+        btnExport.addEventListener('click', function() {
+            const drawnData = drawnItems.toGeoJSON();
+            const savedData = savedItems.toGeoJSON();
+            
+            // Combina los datos de edición y guardados
+            const combinedData = {
+                "type": "FeatureCollection",
+                "features": [...drawnData.features, ...savedData.features]
+            };
+            
+            const dataStr = JSON.stringify(combinedData, null, 2);
+            const blob = new Blob([dataStr], {type: "application/json"});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "udp_monteria_edicion_" + Date.now() + ".geojson";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+        
+        // Importar GeoJSON
+        fileImport.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const geojson = JSON.parse(event.target.result);
+                    
+                    // Función para añadir capas con estilo dinámico
+                    L.geoJSON(geojson, {
+                        style: (feature) => {
+                            // Asumimos que los datos importados son "Dibujos" nuevos
+                            return drawnStyle();
+                        },
+                        onEachFeature: (feature, layer) => {
+                            drawnItems.addLayer(layer);
+                            lastDrawnLayer = layer; // El último importado es el último dibujado
+                            layer.bindPopup("Dibujo importado. ¡Guarda si lo deseas!");
+                        }
+                    });
+                    
+                    btnSaveLast.disabled = false;
+                    saveGroupToLS(drawnItems, LS_KEY_DRAWN);
+                    alert("Importación exitosa. Se han añadido elementos a la capa 'Dibujos (edición)'.");
+
+                } catch (error) {
+                    alert("Error al parsear el archivo GeoJSON. Asegúrate de que el formato sea correcto.");
+                    console.error("Error de importación:", error);
+                }
+                fileImport.value = null; // Limpiar el input file
+            };
+            reader.readAsText(file);
+        });
+
+
+        // 5) FUNCIONALIDAD DEL BUSCADOR (UDP/Macro-Zona)
+        // ----------------------------------------------------
+
+        const searchInput = document.getElementById('search-input');
+        const searchButton = document.getElementById('search-button');
+        const searchClearButton = document.getElementById('search-clear');
+        let highlightLayer = null;
+
+        // Función para resaltar la UDP encontrada
+        function highlightFeature(layer, style = { color: 'yellow', weight: 5, opacity: 1, fillOpacity: 0.8 }) {
+            // 1. Limpiar el resaltado anterior
+            if (highlightLayer) {
+                map.removeLayer(highlightLayer);
+            }
+            
+            // 2. Crear un nuevo layer temporal para el resaltado
+            highlightLayer = L.geoJSON(layer.feature, {
+                style: style,
+                pane: 'popupPane' // Asegura que esté por encima de la capa base de UDPs
+            }).addTo(map);
+
+            // 3. Zoom al elemento
+            if (layer.getBounds) {
+                map.fitBounds(layer.getBounds().pad(0.1));
+            }
+        }
+
+        // Función principal de búsqueda
+        function performSearch() {
+            const searchTerm = searchInput.value.trim().toUpperCase();
+            
+            // Limpiar resaltado previo antes de una nueva búsqueda
+            if (highlightLayer) {
+                map.removeLayer(highlightLayer);
+                highlightLayer = null;
+            }
+            
+            if (searchTerm === '') {
+                searchClearButton.style.display = 'none';
+                return; // No hacer nada si el campo está vacío
+            }
+            
+            searchClearButton.style.display = 'block'; // Mostrar botón de limpiar
+            
+            let foundLayer = null;
+
+            // Iterar sobre las capas de UDP para buscar
+            udpLimitsLayer.eachLayer(layer => {
+                const props = layer.feature.properties;
+                const codigo = props.codigo ? props.codigo.toUpperCase() : '';
+                const macroZone = props.macro_zona ? props.macro_zona.toUpperCase() : '';
+
+                // Comprueba si el término de búsqueda coincide con el código O la macro_zona
+                if (codigo.includes(searchTerm) || macroZone.includes(searchTerm)) {
+                    foundLayer = layer;
+                    return false; // Salir del loop si encuentra la primera coincidencia
+                }
+            });
+
+            if (foundLayer) {
+                // Encontrado: Resaltar y hacer zoom
+                highlightFeature(foundLayer, { color: 'yellow', weight: 5, opacity: 1, fillOpacity: 0.8 });
+                
+                // Abrir el popup
+                foundLayer.openPopup(); 
+
+            } else {
+                // No encontrado: mostrar advertencia temporal
+                alert(`No se encontró ninguna UDP con el código o macro-zona: ${searchTerm}`);
+                map.setView(MONTERIA_CENTER, MONTERIA_ZOOM); // Volver al centro
+            }
+        }
+
+        // Listener para el botón de búsqueda
+        searchButton.addEventListener('click', performSearch);
+
+        // Listener para el campo de entrada (permite buscar con Enter)
+        searchInput.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault(); // Previene la acción por defecto del Enter en formularios
+                performSearch();
+            }
+        });
+
+        // Listener para el botón de limpiar búsqueda
+        searchClearButton.addEventListener('click', function() {
+            searchInput.value = '';
+            searchClearButton.style.display = 'none';
+            if (highlightLayer) {
+                map.removeLayer(highlightLayer);
+                highlightLayer = null;
+            }
+            
+        });
+
+    </script>
+    
+</body>
+</html>
